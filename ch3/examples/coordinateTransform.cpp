@@ -1,6 +1,4 @@
 #include <iostream>
-#include <vector>
-#include <algorithm>
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 

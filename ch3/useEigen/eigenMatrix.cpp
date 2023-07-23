@@ -13,10 +13,11 @@ using namespace Eigen;
 #define MATRIX_SIZE 50
 
 /****************************
-* 本程序演示了 Eigen 基本类型的使用
-****************************/
+ * 本程序演示了 Eigen 基本类型的使用
+ ****************************/
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     // Eigen 中所有向量和矩阵都是Eigen::Matrix，它是一个模板类。它的前三个参数为：数据类型，行，列
     // 声明一个2*3的float矩阵
     Matrix<float, 2, 3> matrix_23;
@@ -28,7 +29,7 @@ int main(int argc, char **argv) {
     Matrix<float, 3, 1> vd_3d;
 
     // Matrix3d 实质上是 Eigen::Matrix<double, 3, 3>
-    Matrix3d matrix_33 = Matrix3d::Zero(); //初始化为零
+    Matrix3d matrix_33 = Matrix3d::Zero(); // 初始化为零
     // 如果不确定矩阵大小，可以使用动态大小的矩阵
     Matrix<double, Dynamic, Dynamic> matrix_dynamic;
     // 更简单的
@@ -39,12 +40,15 @@ int main(int argc, char **argv) {
     // 输入数据（初始化）
     matrix_23 << 1, 2, 3, 4, 5, 6;
     // 输出
-    cout << "matrix 2x3 from 1 to 6: \n" << matrix_23 << endl;
+    cout << "matrix 2x3 from 1 to 6: \n"
+         << matrix_23 << endl;
 
     // 用()访问矩阵中的元素
     cout << "print matrix 2x3: " << endl;
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < 3; j++) cout << matrix_23(i, j) << "\t";
+    for (int i = 0; i < 2; i++)
+    {
+        for (int j = 0; j < 3; j++)
+            cout << matrix_23(i, j) << "\t";
         cout << endl;
     }
 
@@ -66,72 +70,78 @@ int main(int argc, char **argv) {
     // Eigen::Matrix<double, 2, 3> result_wrong_dimension = matrix_23.cast<double>() * v_3d;
 
     // 一些矩阵运算
-    // 四则运算就不演示了，直接用+-*/即可。
-    matrix_33 = Matrix3d::Random();      // 随机数矩阵
-    cout << "random matrix: \n" << matrix_33 << endl;
-    cout << "transpose: \n" << matrix_33.transpose() << endl;      // 转置
-    cout << "sum: " << matrix_33.sum() << endl;            // 各元素和
-    cout << "trace: " << matrix_33.trace() << endl;          // 迹
-    cout << "times 10: \n" << 10 * matrix_33 << endl;               // 数乘
-    cout << "inverse: \n" << matrix_33.inverse() << endl;        // 逆
-    cout << "det: " << matrix_33.determinant() << endl;    // 行列式
+    // 1. 四则运算就不演示了，直接用+-*/即可。
+    matrix_33 = Matrix3d::Random(); // 随机数矩阵
+    cout << "random matrix: \n"
+         << matrix_33 << endl;
+    cout << "transpose: \n"
+         << matrix_33.transpose() << endl;          // 转置
+    cout << "sum: " << matrix_33.sum() << endl;     // 各元素和
+    cout << "trace: " << matrix_33.trace() << endl; // 迹
+    cout << "times 10: \n"
+         << 10 * matrix_33 << endl; // 数乘
+    cout << "inverse: \n"
+         << matrix_33.inverse() << endl;                // 逆
+    cout << "det: " << matrix_33.determinant() << endl; // 行列式
 
-    // added
+    // 2. matrix and its inverse
     Matrix<double, 3, 3> result3 = matrix_33 * matrix_33.inverse();
-    cout << "matrix multiplied by its inverse: \n" << result3 << endl;
+    cout << "matrix multiplied by its inverse: \n"
+         << result3 << endl;
 
     // 特征值
-    // 实对称矩阵可以保证对角化成功
+    // 1. 实对称矩阵可以保证对角化成功
     SelfAdjointEigenSolver<Matrix3d> eigen_solver(matrix_33.transpose() * matrix_33);
-    cout << "Eigen values = \n" << eigen_solver.eigenvalues() << endl;
-    cout << "Eigen vectors = \n" << eigen_solver.eigenvectors() << endl;
+    cout << "Eigen values = \n"
+         << eigen_solver.eigenvalues() << endl;
+    cout << "Eigen vectors = \n"
+         << eigen_solver.eigenvectors() << endl;
 
-    // added
-    Eigen::MatrixXcd matrix(3, 3);  // 定义一个复数矩阵
-
+    // 2. complex matrix
+    Eigen::MatrixXcd matrix(3, 3); // 定义一个复数矩阵
     // 给矩阵赋值
     matrix << std::complex<double>(1.0, 0.0), std::complex<double>(2.0, 0.0), std::complex<double>(3.0, 0.0),
-              std::complex<double>(4.0, 0.0), std::complex<double>(5.0, 0.0), std::complex<double>(6.0, 0.0),
-              std::complex<double>(7.0, 0.0), std::complex<double>(8.0, 0.0), std::complex<double>(9.0, 0.0);
-
-    Eigen::ComplexEigenSolver<Eigen::MatrixXcd> solver(matrix);  // 创建EigenSolver对象并传入矩阵
-    Eigen::VectorXcd eigenvalues = solver.eigenvalues();  // 获取特征值
-    Eigen::MatrixXcd eigenvectors = solver.eigenvectors();  // 获取特征向量
-
+        std::complex<double>(4.0, 0.0), std::complex<double>(5.0, 0.0), std::complex<double>(6.0, 0.0),
+        std::complex<double>(7.0, 0.0), std::complex<double>(8.0, 0.0), std::complex<double>(9.0, 0.0);
+    Eigen::ComplexEigenSolver<Eigen::MatrixXcd> solver(matrix); // 创建EigenSolver对象并传入矩阵
+    Eigen::VectorXcd eigenvalues = solver.eigenvalues();        // 获取特征值
+    Eigen::MatrixXcd eigenvectors = solver.eigenvectors();      // 获取特征向量
     // 输出特征值和特征向量
-    cout << "complex matrix :\n" << matrix << endl;
-    std::cout << "Eigenvalues:\n" << eigenvalues << std::endl;
-    std::cout << "Eigenvectors:\n" << eigenvectors << std::endl;
+    cout << "complex matrix :\n"
+         << matrix << endl;
+    std::cout << "Eigenvalues:\n"
+              << eigenvalues << std::endl;
+    std::cout << "Eigenvectors:\n"
+              << eigenvectors << std::endl;
 
     // 解方程
     // 我们求解 matrix_NN * x = v_Nd 这个方程
     // N的大小在前边的宏里定义，它由随机数生成
     // 直接求逆自然是最直接的，但是求逆运算量大 (only when the size of matrix is big)
 
-    Matrix<double, MATRIX_SIZE, MATRIX_SIZE> matrix_NN
-        = MatrixXd::Random(MATRIX_SIZE, MATRIX_SIZE);
-    matrix_NN = matrix_NN * matrix_NN.transpose();  // 保证半正定
+    Matrix<double, MATRIX_SIZE, MATRIX_SIZE> matrix_NN = MatrixXd::Random(MATRIX_SIZE, MATRIX_SIZE);
+    matrix_NN = matrix_NN * matrix_NN.transpose(); // 保证半正定
     Matrix<double, MATRIX_SIZE, 1> v_Nd = MatrixXd::Random(MATRIX_SIZE, 1);
 
-    // 直接求逆
+    // 1.直接求逆
     clock_t time_stt = clock(); // 计时
     Matrix<double, MATRIX_SIZE, 1> x = matrix_NN.inverse() * v_Nd;
     cout << "time of normal inverse is "
-         << 1000 * (clock() - time_stt) / (double) CLOCKS_PER_SEC << "ms" << endl;
+         << 1000 * (clock() - time_stt) / (double)CLOCKS_PER_SEC << "ms" << endl;
     cout << "x = " << x.transpose() << endl;
 
-    // 通常用矩阵分解来求，例如QR分解，速度会快很多
+    // 2.通常用矩阵分解来求，例如QR分解，速度会快很多
     time_stt = clock();
     x = matrix_NN.colPivHouseholderQr().solve(v_Nd);
     cout << "time of Qr decomposition is "
-         << 1000 * (clock() - time_stt) / (double) CLOCKS_PER_SEC << "ms" << endl;
+         << 1000 * (clock() - time_stt) / (double)CLOCKS_PER_SEC << "ms" << endl;
     cout << "x = " << x.transpose() << endl;
 
-    // 对于正定矩阵，还可以用cholesky分解来解方程
+    // 3.对于正定矩阵，还可以用cholesky分解来解方程
     time_stt = clock();
     x = matrix_NN.ldlt().solve(v_Nd);
     cout << "time of ldlt decomposition is "
-         << 1000 * (clock() - time_stt) / (double) CLOCKS_PER_SEC << "ms" << endl;
+         << 1000 * (clock() - time_stt) / (double)CLOCKS_PER_SEC << "ms" << endl;
     cout << "x = " << x.transpose() << endl;
 
     return 0;
