@@ -1,15 +1,14 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0)
+project(ch5)
 
-set(CMAKE_BUILD_TYPE "Release")
-# 添加c++ 11标准支持
-set(CMAKE_CXX_FLAGS "-std=c++11 -O2")
+set(CMAKE_BUILD_TYPE Release)
+set(CMAKE_CXX_FLAGS "-std=c++11 -O3")
 
 # Eigen
-include_directories("/usr/include/eigen3")
+include_directories("/usr/local/include/eigen3")
 
-# 寻找OpenCV库
+# OpenCV
 find_package(OpenCV REQUIRED)
-# 添加头文件
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 add_subdirectory(imageBasics)

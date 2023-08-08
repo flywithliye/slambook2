@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.0)
 project(ch6)
 
 set(CMAKE_BUILD_TYPE Release)
@@ -19,7 +19,7 @@ find_package(G2O REQUIRED)
 include_directories(${G2O_INCLUDE_DIRS})
 
 # Eigen
-include_directories("/usr/include/eigen3")
+include_directories("/usr/local/include/eigen3")
 
 add_executable(gaussNewton gaussNewton.cpp)
 target_link_libraries(gaussNewton ${OpenCV_LIBS})
