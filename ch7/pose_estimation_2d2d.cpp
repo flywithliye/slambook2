@@ -1,9 +1,9 @@
 #include <iostream>
+#include <string>
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
-// #include "extra.h" // use this if in OpenCV2
 
 using namespace std;
 using namespace cv;
@@ -19,28 +19,28 @@ void find_feature_matches(
     std::vector<DMatch> &matches);
 
 void pose_estimation_2d2d(
-    std::vector<KeyPoint> keypoints_1,
-    std::vector<KeyPoint> keypoints_2,
-    std::vector<DMatch> matches,
+    const std::vector<KeyPoint> &keypoints_1,
+    const std::vector<KeyPoint> &keypoints_2,
+    const std::vector<DMatch> &matches,
     Mat &R, Mat &t);
 
 // 像素坐标转相机归一化坐标
 Point2d pixel2cam(const Point2d &p, const Mat &K);
 
+string img_1_file = "./../1.png";
+string img_2_file = "./../2.png";
+
 int main(int argc, char **argv)
 {
-    if (argc != 3)
-    {
-        cout << "usage: pose_estimation_2d2d img1 img2" << endl;
-        return 1;
-    }
+
     //-- 读取图像
-    Mat img_1 = imread(argv[1], CV_LOAD_IMAGE_COLOR);
-    Mat img_2 = imread(argv[2], CV_LOAD_IMAGE_COLOR);
+    Mat img_1 = imread(img_1_file, cv::IMREAD_COLOR);
+    Mat img_2 = imread(img_2_file, cv::IMREAD_COLOR);
     assert(img_1.data && img_2.data && "Can not load images!");
 
     vector<KeyPoint> keypoints_1, keypoints_2;
     vector<DMatch> matches;
+    
     find_feature_matches(img_1, img_2, keypoints_1, keypoints_2, matches);
     cout << "一共找到了" << matches.size() << "组匹配点" << endl;
 
@@ -59,14 +59,15 @@ int main(int argc, char **argv)
 
     //-- 验证对极约束
     Mat K = (Mat_<double>(3, 3) << 520.9, 0, 325.1, 0, 521.0, 249.7, 0, 0, 1);
+    int i = 1;
     for (DMatch m : matches)
     {
-        Point2d pt1 = pixel2cam(keypoints_1[m.queryIdx].pt, K);
+        Point2d pt1 = pixel2cam(keypoints_1[m.queryIdx].pt, K); // 关键点中存的是像素坐标
         Mat y1 = (Mat_<double>(3, 1) << pt1.x, pt1.y, 1);
         Point2d pt2 = pixel2cam(keypoints_2[m.trainIdx].pt, K);
         Mat y2 = (Mat_<double>(3, 1) << pt2.x, pt2.y, 1);
         Mat d = y2.t() * t_x * R * y1;
-        cout << "epipolar constraint = " << d << endl;
+        cout << "match: " << i++ << " epipolar constraint = " << d << endl;
     }
     return 0;
 }
@@ -78,13 +79,10 @@ void find_feature_matches(const Mat &img_1, const Mat &img_2,
 {
     //-- 初始化
     Mat descriptors_1, descriptors_2;
-    // used in OpenCV3
     Ptr<FeatureDetector> detector = ORB::create();
     Ptr<DescriptorExtractor> descriptor = ORB::create();
-    // use this if you are in OpenCV2
-    // Ptr<FeatureDetector> detector = FeatureDetector::create ( "ORB" );
-    // Ptr<DescriptorExtractor> descriptor = DescriptorExtractor::create ( "ORB" );
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
+
     //-- 第一步:检测 Oriented FAST 角点位置
     detector->detect(img_1, keypoints_1);
     detector->detect(img_2, keypoints_2);
@@ -102,7 +100,7 @@ void find_feature_matches(const Mat &img_1, const Mat &img_2,
     double min_dist = 10000, max_dist = 0;
 
     // 找出所有匹配之间的最小距离和最大距离, 即是最相似的和最不相似的两组点之间的距离
-    for (int i = 0; i < descriptors_1.rows; i++)
+    for (int i = 0; i < descriptors_1.rows; i++) // 可以用orb_cv.cpp中的minmax_element方法优化
     {
         double dist = match[i].distance;
         if (dist < min_dist)
@@ -131,10 +129,11 @@ Point2d pixel2cam(const Point2d &p, const Mat &K)
         (p.y - K.at<double>(1, 2)) / K.at<double>(1, 1));
 }
 
-void pose_estimation_2d2d(std::vector<KeyPoint> keypoints_1,
-                          std::vector<KeyPoint> keypoints_2,
-                          std::vector<DMatch> matches,
-                          Mat &R, Mat &t)
+void pose_estimation_2d2d(
+    const std::vector<KeyPoint> &keypoints_1,
+    const std::vector<KeyPoint> &keypoints_2,
+    const std::vector<DMatch> &matches,
+    Mat &R, Mat &t)
 {
     // 相机内参,TUM Freiburg2
     Mat K = (Mat_<double>(3, 3) << 520.9, 0, 325.1, 0, 521.0, 249.7, 0, 0, 1);
@@ -151,7 +150,7 @@ void pose_estimation_2d2d(std::vector<KeyPoint> keypoints_1,
 
     //-- 计算基础矩阵
     Mat fundamental_matrix;
-    fundamental_matrix = findFundamentalMat(points1, points2, CV_FM_8POINT);
+    fundamental_matrix = findFundamentalMat(points1, points2, cv::FM_8POINT);
     cout << "fundamental_matrix is " << endl
          << fundamental_matrix << endl;
 

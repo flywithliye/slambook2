@@ -4,14 +4,16 @@
 
 #include <opencv2/opencv.hpp>
 #include <string>
-// #include <nmmintrin.h>
 #include <chrono>
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
+#include <nmmintrin.h>
+#endif
 
 using namespace std;
 
 // global variables
-string first_file = "./1.png";
-string second_file = "./2.png";
+string first_file = "./../1.png";
+string second_file = "./../2.png";
 
 // 32 bit unsigned int, will have 8, 8x32=256
 typedef vector<uint32_t> DescType; // Descriptor type
@@ -39,8 +41,8 @@ int main(int argc, char **argv)
 {
 
     // load image
-    cv::Mat first_image = cv::imread(first_file, 0);
-    cv::Mat second_image = cv::imread(second_file, 0);
+    cv::Mat first_image = cv::imread(first_file, cv::IMREAD_GRAYSCALE);
+    cv::Mat second_image = cv::imread(second_file, cv::IMREAD_GRAYSCALE);
     assert(first_image.data != nullptr && second_image.data != nullptr);
 
     // detect FAST keypoints1 using threshold=40
@@ -415,11 +417,13 @@ void BfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vecto
             if (desc2[i2].empty())
                 continue;
             int distance = 0;
+
+            // 自适应适配框架
             for (int k = 0; k < 8; k++)
             {
-#if defined __aarch64__
+#if defined(__arm__) || defined(__aarch64__)
                 distance += __builtin_popcount(desc1[i1][k] ^ desc2[i2][k]);
-#elif defined __x86_64__
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__i386) || defined(_M_IX86)
                 distance += _mm_popcnt_u32(desc1[i1][k] ^ desc2[i2][k]);
 #endif
             }
@@ -431,7 +435,7 @@ void BfMatch(const vector<DescType> &desc1, const vector<DescType> &desc2, vecto
         }
         if (m.distance < d_max)
         {
-            matches.push_back(m);
+            matches.push_back(m);  // 此处直接过滤掉了偏差较大的匹配
         }
     }
 }

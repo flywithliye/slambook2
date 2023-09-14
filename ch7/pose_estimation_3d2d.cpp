@@ -1,4 +1,6 @@
 #include <iostream>
+#include <string>
+#include <chrono>
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
 #include <opencv2/highgui/highgui.hpp>
@@ -12,7 +14,6 @@
 #include <g2o/core/optimization_algorithm_gauss_newton.h>
 #include <g2o/solvers/dense/linear_solver_dense.h>
 #include <sophus/se3.hpp>
-#include <chrono>
 
 using namespace std;
 using namespace cv;
@@ -26,10 +27,11 @@ void find_feature_matches(
 // 像素坐标转相机归一化坐标
 Point2d pixel2cam(const Point2d &p, const Mat &K);
 
-// BA by g2o
+// Eigen向量的Vector
 typedef vector<Eigen::Vector2d, Eigen::aligned_allocator<Eigen::Vector2d>> VecVector2d;
 typedef vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> VecVector3d;
 
+// BA by g2o
 void bundleAdjustmentG2O(
     const VecVector3d &points_3d,
     const VecVector2d &points_2d,
@@ -43,46 +45,54 @@ void bundleAdjustmentGaussNewton(
     const Mat &K,
     Sophus::SE3d &pose);
 
+// 文件路径
+string img1_file = "./../1.png";
+string img2_file = "./../2.png";
+string depth1_file = "./../1_depth.png";
+string depth2_file = "./../2_depth.png";
+
 int main(int argc, char **argv)
 {
-    if (argc != 5)
-    {
-        cout << "usage: pose_estimation_3d2d img1 img2 depth1 depth2" << endl;
-        return 1;
-    }
-    //-- 读取图像
-    Mat img_1 = imread(argv[1], CV_LOAD_IMAGE_COLOR);
-    Mat img_2 = imread(argv[2], CV_LOAD_IMAGE_COLOR);
+
+    // 读取图像
+    Mat img_1 = imread(img1_file, cv::IMREAD_COLOR);
+    Mat img_2 = imread(img2_file, cv::IMREAD_COLOR);
     assert(img_1.data && img_2.data && "Can not load images!");
 
+    // 特征提取和匹配
     vector<KeyPoint> keypoints_1, keypoints_2;
     vector<DMatch> matches;
     find_feature_matches(img_1, img_2, keypoints_1, keypoints_2, matches);
     cout << "一共找到了" << matches.size() << "组匹配点" << endl;
 
     // 建立3D点
-    Mat d1 = imread(argv[3], CV_LOAD_IMAGE_UNCHANGED); // 深度图为16位无符号数，单通道图像
+    Mat d1 = imread(depth1_file, cv::IMREAD_UNCHANGED); // 深度图为16位无符号数，单通道图像
     Mat K = (Mat_<double>(3, 3) << 520.9, 0, 325.1, 0, 521.0, 249.7, 0, 0, 1);
     vector<Point3f> pts_3d;
     vector<Point2f> pts_2d;
     for (DMatch m : matches)
     {
-        ushort d = d1.ptr<unsigned short>(int(keypoints_1[m.queryIdx].pt.y))[int(keypoints_1[m.queryIdx].pt.x)];
-        if (d == 0) // bad depth
+        ushort d = d1.ptr<unsigned short>(int(keypoints_1[m.queryIdx].pt.y))[int(keypoints_1[m.queryIdx].pt.x)]; // 匹配点的深度d
+        if (d == 0)                                                                                              // bad depth
+        {
             continue;
+        }
         float dd = d / 5000.0;
-        Point2d p1 = pixel2cam(keypoints_1[m.queryIdx].pt, K);
-        pts_3d.push_back(Point3f(p1.x * dd, p1.y * dd, dd));
-        pts_2d.push_back(keypoints_2[m.trainIdx].pt);
+        Point2d p1 = pixel2cam(keypoints_1[m.queryIdx].pt, K); // 像素坐标系坐标->归一化坐标
+        pts_3d.push_back(Point3f(p1.x * dd, p1.y * dd, dd));   // 归一化坐标->相机坐标系坐标I1（相当于世界系）
+        pts_2d.push_back(keypoints_2[m.trainIdx].pt);          // 匹配点的像素坐标系坐标I2（新观测）
     }
 
     cout << "3d-2d pairs: " << pts_3d.size() << endl;
 
+    // 1. Opencv PnP求解相对位姿变化 -> R&t
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
+
     Mat r, t;
-    solvePnP(pts_3d, pts_2d, K, Mat(), r, t, false); // 调用OpenCV 的 PnP 求解，可选择EPNP，DLS等方法
+    cv::solvePnP(pts_3d, pts_2d, K, Mat(), r, t, false); // 调用OpenCV 的 PnP 求解，可选择EPNP，DLS等方法
     Mat R;
     cv::Rodrigues(r, R); // r为旋转向量形式，用Rodrigues公式转换为矩阵
+
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "solve pnp in opencv cost time: " << time_used.count() << " seconds." << endl;
@@ -92,6 +102,7 @@ int main(int argc, char **argv)
     cout << "t=" << endl
          << t << endl;
 
+    // Opencv Point对象转换为Eigen Vector对象
     VecVector3d pts_3d_eigen;
     VecVector2d pts_2d_eigen;
     for (size_t i = 0; i < pts_3d.size(); ++i)
@@ -100,38 +111,39 @@ int main(int argc, char **argv)
         pts_2d_eigen.push_back(Eigen::Vector2d(pts_2d[i].x, pts_2d[i].y));
     }
 
+    // 2. 手写高斯牛顿BA -> T
     cout << "calling bundle adjustment by gauss newton" << endl;
-    Sophus::SE3d pose_gn;
+    Sophus::SE3d pose_gn; // 单位 SE(3) 元素
     t1 = chrono::steady_clock::now();
-    bundleAdjustmentGaussNewton(pts_3d_eigen, pts_2d_eigen, K, pose_gn);
+    bundleAdjustmentGaussNewton(pts_3d_eigen, pts_2d_eigen, K, pose_gn); // 位姿初值为0
     t2 = chrono::steady_clock::now();
     time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "solve pnp by gauss newton cost time: " << time_used.count() << " seconds." << endl;
 
+    // 3. G2O图优化BA -> T
     cout << "calling bundle adjustment by g2o" << endl;
-    Sophus::SE3d pose_g2o;
+    Sophus::SE3d pose_g2o; // 单位 SE(3) 元素
     t1 = chrono::steady_clock::now();
-    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_g2o);
+    bundleAdjustmentG2O(pts_3d_eigen, pts_2d_eigen, K, pose_g2o); // 位姿初值为0
     t2 = chrono::steady_clock::now();
     time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
     cout << "solve pnp by g2o cost time: " << time_used.count() << " seconds." << endl;
+
     return 0;
 }
 
-void find_feature_matches(const Mat &img_1, const Mat &img_2,
-                          std::vector<KeyPoint> &keypoints_1,
-                          std::vector<KeyPoint> &keypoints_2,
-                          std::vector<DMatch> &matches)
+void find_feature_matches(
+    const Mat &img_1, const Mat &img_2,
+    std::vector<KeyPoint> &keypoints_1,
+    std::vector<KeyPoint> &keypoints_2,
+    std::vector<DMatch> &matches)
 {
     //-- 初始化
     Mat descriptors_1, descriptors_2;
-    // used in OpenCV3
     Ptr<FeatureDetector> detector = ORB::create();
     Ptr<DescriptorExtractor> descriptor = ORB::create();
-    // use this if you are in OpenCV2
-    // Ptr<FeatureDetector> detector = FeatureDetector::create ( "ORB" );
-    // Ptr<DescriptorExtractor> descriptor = DescriptorExtractor::create ( "ORB" );
     Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
+
     //-- 第一步:检测 Oriented FAST 角点位置
     detector->detect(img_1, keypoints_1);
     detector->detect(img_2, keypoints_2);
@@ -187,7 +199,7 @@ void bundleAdjustmentGaussNewton(
     typedef Eigen::Matrix<double, 6, 1> Vector6d;
     const int iterations = 10;
     double cost = 0, lastCost = 0;
-    double fx = K.at<double>(0, 0);
+    double fx = K.at<double>(0, 0); // K为cv::Mat
     double fy = K.at<double>(1, 1);
     double cx = K.at<double>(0, 2);
     double cy = K.at<double>(1, 2);
@@ -198,17 +210,19 @@ void bundleAdjustmentGaussNewton(
         Vector6d b = Vector6d::Zero();
 
         cost = 0;
+
         // compute cost
         for (int i = 0; i < points_3d.size(); i++)
         {
-            Eigen::Vector3d pc = pose * points_3d[i];
+            Eigen::Vector3d pc = pose * points_3d[i]; // 世界系->相机系
             double inv_z = 1.0 / pc[2];
             double inv_z2 = inv_z * inv_z;
-            Eigen::Vector2d proj(fx * pc[0] / pc[2] + cx, fy * pc[1] / pc[2] + cy);
+            Eigen::Vector2d proj(fx * pc[0] / pc[2] + cx, fy * pc[1] / pc[2] + cy); // 归一化->像素系
 
-            Eigen::Vector2d e = points_2d[i] - proj;
+            Eigen::Vector2d e = points_2d[i] - proj; // 误差项
 
-            cost += e.squaredNorm();
+            cost += e.squaredNorm(); // 累加误差/损失
+
             Eigen::Matrix<double, 2, 6> J;
             J << -fx * inv_z,
                 0,
@@ -227,6 +241,7 @@ void bundleAdjustmentGaussNewton(
             b += -J.transpose() * e;
         }
 
+        // 求解增量
         Vector6d dx;
         dx = H.ldlt().solve(b);
 
@@ -296,15 +311,15 @@ public:
         Sophus::SE3d T = v->estimate();
         Eigen::Vector3d pos_pixel = _K * (T * _pos3d);
         pos_pixel /= pos_pixel[2];
-        _error = _measurement - pos_pixel.head<2>();
+        _error = _measurement - pos_pixel.head<2>(); // 2D投影点 像素系坐标误差 = 观测值 - 预测值
     }
 
     virtual void linearizeOplus() override
     {
         const VertexPose *v = static_cast<VertexPose *>(_vertices[0]);
         Sophus::SE3d T = v->estimate();
-        Eigen::Vector3d pos_cam = T * _pos3d;
-        double fx = _K(0, 0);
+        Eigen::Vector3d pos_cam = T * _pos3d; // 3d点相机系坐标
+        double fx = _K(0, 0);                 // K为Eigen::Matrix3d
         double fy = _K(1, 1);
         double cx = _K(0, 2);
         double cy = _K(1, 2);
@@ -323,8 +338,8 @@ public:
     virtual bool write(ostream &out) const override { return true; }
 
 private:
-    Eigen::Vector3d _pos3d;
-    Eigen::Matrix3d _K;
+    Eigen::Vector3d _pos3d; // 3d点坐标
+    Eigen::Matrix3d _K;  // 有相机模型
 };
 
 void bundleAdjustmentG2O(
@@ -335,8 +350,9 @@ void bundleAdjustmentG2O(
 {
 
     // 构建图优化，先设定g2o
-    typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 3>> BlockSolverType;           // pose is 6, landmark is 3
+    typedef g2o::BlockSolver<g2o::BlockSolverTraits<6, 2>> BlockSolverType;           // pose is 6, observation is 2
     typedef g2o::LinearSolverDense<BlockSolverType::PoseMatrixType> LinearSolverType; // 线性求解器类型
+
     // 梯度下降方法，可以从GN, LM, DogLeg 中选
     auto solver = new g2o::OptimizationAlgorithmGaussNewton(
         g2o::make_unique<BlockSolverType>(g2o::make_unique<LinearSolverType>()));
@@ -347,38 +363,38 @@ void bundleAdjustmentG2O(
     // vertex
     VertexPose *vertex_pose = new VertexPose(); // camera vertex_pose
     vertex_pose->setId(0);
-    vertex_pose->setEstimate(Sophus::SE3d());
+    vertex_pose->setEstimate(Sophus::SE3d()); // 无优化初值 -> 此处应该使用形参中的pose
     optimizer.addVertex(vertex_pose);
 
     // K
-    Eigen::Matrix3d K_eigen;
+    Eigen::Matrix3d K_eigen; // cv::Mat -> Eigen::Matrix3d
     K_eigen << K.at<double>(0, 0), K.at<double>(0, 1), K.at<double>(0, 2),
         K.at<double>(1, 0), K.at<double>(1, 1), K.at<double>(1, 2),
         K.at<double>(2, 0), K.at<double>(2, 1), K.at<double>(2, 2);
 
     // edges
-    int index = 1;
     for (size_t i = 0; i < points_2d.size(); ++i)
     {
         auto p2d = points_2d[i];
         auto p3d = points_3d[i];
-        EdgeProjection *edge = new EdgeProjection(p3d, K_eigen);
-        edge->setId(index);
+        EdgeProjection *edge = new EdgeProjection(p3d, K_eigen); // 3d点以参数初始化边
+        edge->setId(i);
         edge->setVertex(0, vertex_pose);
-        edge->setMeasurement(p2d);
+        edge->setMeasurement(p2d); // 2d点以观测值提供给该边
         edge->setInformation(Eigen::Matrix2d::Identity());
         optimizer.addEdge(edge);
-        index++;
     }
 
+    // 优化求解
     chrono::steady_clock::time_point t1 = chrono::steady_clock::now();
-    optimizer.setVerbose(true);
     optimizer.initializeOptimization();
     optimizer.optimize(10);
     chrono::steady_clock::time_point t2 = chrono::steady_clock::now();
     chrono::duration<double> time_used = chrono::duration_cast<chrono::duration<double>>(t2 - t1);
+
     cout << "optimization costs time: " << time_used.count() << " seconds." << endl;
     cout << "pose estimated by g2o =\n"
          << vertex_pose->estimate().matrix() << endl;
-    pose = vertex_pose->estimate();
+
+    pose = vertex_pose->estimate(); // 返回值
 }
