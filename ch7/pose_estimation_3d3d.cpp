@@ -302,7 +302,7 @@ void bundleAdjustment(
             Eigen::Vector3d(pts2[i].x, pts2[i].y, pts2[i].z)); // 点2作为3D点（空间点）
         edge->setVertex(0, pose);
         edge->setMeasurement(Eigen::Vector3d(
-            pts1[i].x, pts1[i].y, pts1[i].z)); // 点1作为测量值（相机测到的3D点）这两个地方反过来了 相对于书中推导 若要一致需要交换q1和q2
+            pts1[i].x, pts1[i].y, pts1[i].z)); // 点1作为测量值（相机测到的3D点）这两个地方反过来了 相对于书中推导 若要一致需要交换pts1和pts2
         edge->setInformation(Eigen::Matrix3d::Identity());
         optimizer.addEdge(edge);
     }
